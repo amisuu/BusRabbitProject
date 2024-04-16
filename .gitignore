@@ -97,10 +97,6 @@ StyleCopReport.xml
 *.pidb
 *.svclog
 *.scc
-*/WebAPI/appsettings.json
-*/WebAPI/appsettings.Development.json
-*.package-lock.json
-*.package.json
 
 # Chutzpah Test files
 _Chutzpah*
@@ -243,7 +239,6 @@ ClientBin/
 *.pfx
 *.publishsettings
 orleans.codegen.cs
-ClientApp/.angular/cache/
 
 # Including strong name files can present a security risk
 # (https://github.com/github/gitignore/pull/2483#issue-259490424)
