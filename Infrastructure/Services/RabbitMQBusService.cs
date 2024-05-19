@@ -111,7 +111,13 @@ namespace Infrastructure.Services
             where TEvent : Event
             where TEventHandler : IEventHandler<TEvent>
         {
-            throw new NotImplementedException();
+            var eventName = _subscriptionsManager.GetEventIdentifier<TEvent>();
+
+            _logger.LogInformation("Unsubscribing from event {EventName} ", eventName);
+
+            _subscriptionsManager.RemoveSubscription<TEvent, TEventHandler>();
+
+            _logger.LogInformation("Unsubscribed from event {EventName}.", eventName);
         }
 
         private void StartBasicConsume()
