@@ -1,5 +1,6 @@
 ﻿using Domain.Bus;
 using Domain.Subscriptions;
+using Infrastructure.Cache;
 using Infrastructure.Interfaces;
 using Infrastructure.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,16 +11,9 @@ namespace Infrastructure.IoC
 {
     public static class DependencyContainer
     {
-        public static void AddRabbitMQEventBus(this IServiceCollection services, string connectionUrl, string brokerName, string queueName, int timeoutBeforeReconnecting = 15)
+        public static void AddRabbitMQEventBus(this IServiceCollection services, string connectionUrl, string brokerName, string queueName, int timeoutBeforeReconnecting)
         {
-            services.AddSingleton<IEventBus, RabbitMQBusService>(factory =>
-            {
-                var persistentConnection = factory.GetService<IConnectionPersistentService>();
-                var subscriptionManager = factory.GetService<ISubscriptionManager>();
-                var logger = factory.GetService<ILogger<RabbitMQBusService>>();
-
-                return new RabbitMQBusService(factory, logger, subscriptionManager, persistentConnection, brokerName, queueName);
-            });
+            services.AddSingleton<ISubscriptionManager, EventSubscriptionManagerCache>();
 
             services.AddSingleton<IConnectionPersistentService, ConnectionPersistentService>(factory =>
             {
@@ -31,6 +25,16 @@ namespace Infrastructure.IoC
                 };
 
                 return new ConnectionPersistentService(connectionFactory, logger, timeoutBeforeReconnecting);
+            });
+
+            services.AddSingleton<IEventBus, RabbitMQBusService>(factory =>
+            {
+                var serviceProvider = factory.GetRequiredService<IServiceProvider>();
+                var persistentConnection = factory.GetRequiredService<IConnectionPersistentService>();
+                var subscriptionManager = factory.GetRequiredService<ISubscriptionManager>();
+                var logger = factory.GetRequiredService<ILogger<RabbitMQBusService>>();
+
+                return new RabbitMQBusService(serviceProvider, logger, subscriptionManager, persistentConnection, brokerName, queueName);
             });
 
         }

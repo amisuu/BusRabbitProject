@@ -7,9 +7,8 @@ using Polly;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
-using System;
-using System.Diagnostics.Tracing;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 
@@ -232,6 +231,80 @@ namespace Infrastructure.Services
             {
                 _logger.LogError("Error with enqueue message: {Error}.", ex.Message);
             }
+        }
+
+        private void SubscriptionManager_OnEventRemoved(object sender, string eventName)
+        {
+            if (!_persistentConnection.IsConnected)
+            {
+                _persistentConnection.TryConnect();
+            }
+
+            using (var channel = _persistentConnection.CreateModel())
+            {
+                channel.QueueUnbind(queue: _queueName, exchange: _exchangeName, routingKey: eventName);
+
+                if (_subscriptionsManager.IsEmpty)
+                {
+                    _consumerChannel.Close();
+                }
+            }
+        }
+
+        private void DoCreateConsumerChannel()
+        {
+            _consumerChannel.Dispose();
+            _consumerChannel = CreateConsumerChannel();
+            StartBasicConsume();
+        }
+
+        private void RecreateSubscriptions()
+        {
+            var subscriptions = _subscriptionsManager.GetAllSubscriptions();
+            _subscriptionsManager.Clear();
+
+            Type eventBusType = this.GetType();
+            MethodInfo genericSubscribe;
+
+            foreach (var entry in subscriptions)
+            {
+                foreach (var subscription in entry.Value)
+                {
+                    genericSubscribe = eventBusType.GetMethod("Subscribe").MakeGenericMethod(subscription.EventType, subscription.HandlerType);
+                    genericSubscribe.Invoke(this, null);
+                }
+            }
+        }
+
+        private IModel CreateConsumerChannel()
+        {
+            if (!_persistentConnection.IsConnected)
+            {
+                _persistentConnection.TryConnect();
+            }
+
+            var channel = _persistentConnection.CreateModel();
+
+            channel.ExchangeDeclare(exchange: _exchangeName, type: "direct");
+            channel.QueueDeclare
+            (
+                queue: _queueName,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null
+            );
+
+            channel.CallbackException += (sender, ea) =>
+            {
+                _logger.LogWarning(ea.Exception, "Recreating RabbitMQ consumer channel...");
+                DoCreateConsumerChannel();
+            };
+
+            _logger.LogTrace("Created RabbitMQ consumer channel.");
+
+
+            return channel;
         }
 
     }
